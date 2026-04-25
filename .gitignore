@@ -1,0 +1,51 @@
+# ── VS Code Local History (never commit) ──────────────────────────────────────
+.history/
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Distribution / packaging artifacts ───────────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Test artifacts ────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── OS metadata ───────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
+
+# ── Development scratch / patch files ────────────────────────────────────────
+# These are code-iteration notes created during development.
+# They are not part of the package and should not be published.
+dev/
+nodes/_tail.py
+nodes/_compose_tail.py
+# Catch any stray underscore-prefixed scratch files anywhere in the tree:
+**/_patch_*.py
+**/_*_patch.py
+**/_*_patch.js
+
+# ── Large / raw example media ─────────────────────────────────────────────────
+# Screen recordings and auto-named screenshots from development.
+# Add curated example images back with: !examples/my_example.png
+examples/*.mp4
+examples/record_*
+examples/Screenshot*
