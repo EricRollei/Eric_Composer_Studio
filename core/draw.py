@@ -54,7 +54,9 @@ def _build_hand_colors():
         colors = []
         for ie in range(20):
             h = ie / 20.0
-            i = int(h * 6); f = h * 6 - i; q = 1 - f
+            i = int(h * 6)
+            f = h * 6 - i
+            q = 1 - f
             rgb = [(1,f,0),(q,1,0),(0,1,f),(0,q,1),(f,0,1),(1,0,q)][i % 6]
             colors.append(tuple(int(c * 255) for c in rgb))
         return colors
@@ -75,8 +77,10 @@ def _xinsr_stick_scale(canvas_width: int, canvas_height: int) -> int:
 
 
 def _draw_limb_ellipse(canvas, p1, p2, color_rgb, stickwidth):
-    x1,y1=p1; x2,y2=p2
-    mX=int((x1+x2)/2); mY=int((y1+y2)/2)
+    x1, y1 = p1
+    x2, y2 = p2
+    mX = int((x1+x2)/2)
+    mY = int((y1+y2)/2)
     length=int(math.hypot(x2-x1,y2-y1)/2)
     if length<1: return
     angle=math.degrees(math.atan2(y2-y1,x2-x1))
@@ -94,22 +98,28 @@ def _collinear_leg_skip(body, pt_fn, canvas_height):
     skip=set()
     threshold=canvas_height*COLLINEAR_BOTH_FRAC
     for hip_i,knee_i,ankle_i in [(8,9,10),(11,12,13)]:
-        ph=pt_fn(body[hip_i]); pk=pt_fn(body[knee_i]); pa=pt_fn(body[ankle_i])
+        ph = pt_fn(body[hip_i])
+        pk = pt_fn(body[knee_i])
+        pa = pt_fn(body[ankle_i])
         if not(ph and pk and pa): continue
         if pk[1]<threshold or pa[1]<threshold: continue
-        ax,ay=ph; bx,by=pk; cx,cy=pa
+        ax, ay = ph
+        bx, by = pk
+        cx, cy = pa
         cross=abs((cx-ax)*(by-ay)-(cy-ay)*(bx-ax))
         ac_len=math.hypot(cx-ax,cy-ay)
         if ac_len<1.: continue
         if cross/ac_len < max(COLLINEAR_MIN_PX, ac_len*COLLINEAR_FRAC):
-            skip.add(knee_i); skip.add(ankle_i)
+            skip.add(knee_i)
+            skip.add(ankle_i)
     return skip
 
 
 def _max_limb_px(body, pt_fn, canvas_width, canvas_height):
     lengths=[]
     for i,j in BODY_LIMBS:
-        p1=pt_fn(body[i]); p2=pt_fn(body[j])
+        p1 = pt_fn(body[i])
+        p2 = pt_fn(body[j])
         if p1 and p2:
             d=math.hypot(p2[0]-p1[0],p2[1]-p1[1])
             if d>0: lengths.append(d)
@@ -138,7 +148,8 @@ def draw_pose(
     people,pw,ph=pose_keypoint_to_arrays(pose_kp,image_idx)
     if not people: return canvas
 
-    sx=canvas_width/max(pw,1); sy=canvas_height/max(ph,1)
+    sx = canvas_width/max(pw,1)
+    sy = canvas_height/max(ph,1)
 
     if color_mode=="dwpose":
         stick_scale = _xinsr_stick_scale(canvas_width, canvas_height) if xinsr_stick_scaling else 1
@@ -154,8 +165,11 @@ def draw_pose(
     kp_colors   = ENHANCED_KP_COLORS   if color_mode=="enhanced" else DWPOSE_KP_COLORS
 
     for person in people:
-        body=person["body"]; face=person["face"]
-        hand_left=person["hand_left"]; hand_right=person["hand_right"]; foot=person["foot"]
+        body = person["body"]
+        face = person["face"]
+        hand_left = person["hand_left"]
+        hand_right = person["hand_right"]
+        foot = person["foot"]
 
         def pt(kp_row):
             if kp_row[2]<=0: return None
@@ -168,7 +182,8 @@ def draw_pose(
         for idx,(i,j) in enumerate(BODY_LIMBS):
             if color_mode=="dwpose" and idx==17: continue  # pelvis: Enhanced mode only
             if i in skip or j in skip: continue
-            p1=pt(body[i]); p2=pt(body[j])
+            p1 = pt(body[i])
+            p2 = pt(body[j])
             if not(p1 and p2) or not ok(p1,p2): continue
             c=limb_colors[idx]
             if color_mode=="dwpose": _draw_limb_ellipse(canvas,p1,p2,c,stickwidth)
@@ -217,11 +232,14 @@ def _draw_part_limbs(canvas,kps,limbs,sx,sy,lc,rc,si,sw,jr,cm,max_px):
 def _draw_hand_dwpose(canvas, hand_kps, sx, sy, max_px):
     if hand_kps is None or len(hand_kps)<21: return
     hand_colors=_get_hand_colors()
-    hand_max=max_px*0.25; eps=0.01
+    hand_max = max_px*0.25
+    eps = 0.01
     for ie,(i,j) in enumerate(_HAND_EDGES_OFFICIAL):
         if hand_kps[i,2]<=0 or hand_kps[j,2]<=0: continue
-        x1=int(hand_kps[i,0]*sx); y1=int(hand_kps[i,1]*sy)
-        x2=int(hand_kps[j,0]*sx); y2=int(hand_kps[j,1]*sy)
+        x1 = int(hand_kps[i,0]*sx)
+        y1 = int(hand_kps[i,1]*sy)
+        x2 = int(hand_kps[j,0]*sx)
+        y2 = int(hand_kps[j,1]*sy)
         if x1>eps and y1>eps and x2>eps and y2>eps:
             if math.hypot(x2-x1,y2-y1)<=hand_max:
                 rgb=hand_colors[ie]

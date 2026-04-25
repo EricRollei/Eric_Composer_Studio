@@ -1,7 +1,7 @@
 [project]
 name        = "eric-composer-studio"
 description = "High-quality pose detection plus interactive multi-layer image, depth, and pose compositing for ComfyUI. Uses RTMW-x / DWPose via rtmlib ONNX, and adds canvas-based image, depth, and text-layer composers with blend modes, drop shadows, and per-layer transforms."
-version     = "1.0.0"
+version     = "1.0.1"
 license     = { file = "LICENSE.txt" }
 
 [project.urls]

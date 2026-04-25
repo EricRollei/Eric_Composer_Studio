@@ -145,7 +145,8 @@ def _collect_persons(photos, poses, score_threshold=0.3,
                      det_score_thresh=0.5, photo_models=None):
     if photo_models is None:
         photo_models = {}
-    persons = []; color_idx = 0
+    persons = []
+    color_idx = 0
     for label, photo_idx in [("Photo 1", 0), ("Photo 2", 1), ("Photo 3", 2)]:
         photo = photos[photo_idx]
         if photo is None or len(persons) >= MAX_PERSONS: continue
@@ -166,7 +167,9 @@ def _collect_persons(photos, poses, score_threshold=0.3,
         if pk is None or len(persons) >= MAX_PERSONS: continue
         if not isinstance(pk, list): pk = [pk]
         if not pk: continue
-        entry = pk[0]; src_w = entry.get("canvas_width",1024); src_h = entry.get("canvas_height",1024)
+        entry = pk[0]
+        src_w = entry.get("canvas_width",1024)
+        src_h = entry.get("canvas_height",1024)
         for pidx, person in enumerate(entry.get("people", [])):
             if len(persons) >= MAX_PERSONS: break
             persons.append({
@@ -205,17 +208,20 @@ def _centroid_norm(person, src_w, src_h):
 def _apply_transform(person, src_w, src_h, tgt_w, tgt_h,
                      cx_n, cy_n, user_x_frac, user_y_frac,
                      scale, scale_x=1.0, scale_y=1.0, rotation=0.0):
-    cos_a = math.cos(rotation); sin_a = math.sin(rotation)
+    cos_a = math.cos(rotation)
+    sin_a = math.sin(rotation)
     result = copy.deepcopy(person)
     for key in ["pose_keypoints_2d","face_keypoints_2d",
                 "hand_left_keypoints_2d","hand_right_keypoints_2d","foot_keypoints_2d"]:
-        flat = person.get(key, []); new_flat = []
+        flat = person.get(key, [])
+        new_flat = []
         for i in range(0, len(flat), 3):
             x, y, c = flat[i], flat[i+1], flat[i+2]
             if c <= 0:
                 new_flat.extend([0.0, 0.0, 0.0])
             else:
-                kp_nx = x / max(src_w, 1); kp_ny = y / max(src_h, 1)
+                kp_nx = x / max(src_w, 1)
+                kp_ny = y / max(src_h, 1)
                 dx = (kp_nx - cx_n) * scale * scale_x * tgt_w
                 dy = (kp_ny - cy_n) * scale * scale_y * tgt_w
                 new_flat.extend([
@@ -334,7 +340,8 @@ class PoseComposer:
             xforms = {p["id"]: p for p in comp.get("persons", [])}
             is_v2  = (comp.get("coord_v", 1) == 2)
         except Exception:
-            xforms = {}; is_v2 = False
+            xforms = {}
+            is_v2 = False
 
         merged = []
         for info in persons_info:

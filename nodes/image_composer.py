@@ -232,7 +232,8 @@ def _bg_gradient_lin(w, h, c1, c2, angle, _scale):
     ny = (yy / max(h - 1, 1)) - 0.5
     t  = nx * math.cos(rad) + ny * math.sin(rad)
     t  = (t - t.min()) / max(t.max() - t.min(), 1e-6)
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     return c1a * (1.0 - t[..., None]) + c2a * t[..., None]
 
 def _bg_gradient_rad(w, h, c1, c2, _angle, scale):
@@ -241,7 +242,8 @@ def _bg_gradient_rad(w, h, c1, c2, _angle, scale):
     r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
     r = r / (max(w, h) * 0.5 * max(scale, 0.1))
     r = np.clip(r, 0.0, 1.0)
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     return c1a * (1.0 - r[..., None]) + c2a * r[..., None]
 
 def _value_noise(h, w, cell, seed=1234):
@@ -253,11 +255,16 @@ def _value_noise(h, w, cell, seed=1234):
     # Upscale via bilinear
     yy = np.linspace(0, gh - 1, h, dtype=np.float32)
     xx = np.linspace(0, gw - 1, w, dtype=np.float32)
-    y0 = yy.astype(np.int32); y1 = np.clip(y0 + 1, 0, gh - 1)
-    x0 = xx.astype(np.int32); x1 = np.clip(x0 + 1, 0, gw - 1)
-    ty = (yy - y0)[:, None]; tx = (xx - x0)[None, :]
-    a = grid[np.ix_(y0, x0)]; b = grid[np.ix_(y0, x1)]
-    c = grid[np.ix_(y1, x0)]; d = grid[np.ix_(y1, x1)]
+    y0 = yy.astype(np.int32)
+    y1 = np.clip(y0 + 1, 0, gh - 1)
+    x0 = xx.astype(np.int32)
+    x1 = np.clip(x0 + 1, 0, gw - 1)
+    ty = (yy - y0)[:, None]
+    tx = (xx - x0)[None, :]
+    a = grid[np.ix_(y0, x0)]
+    b = grid[np.ix_(y0, x1)]
+    c = grid[np.ix_(y1, x0)]
+    d = grid[np.ix_(y1, x1)]
     top = a * (1 - tx) + b * tx
     bot = c * (1 - tx) + d * tx
     return top * (1 - ty) + bot * ty
@@ -266,15 +273,18 @@ def _perlin_like(h, w, scale, seed=4321):
     """Sum of octaves of value noise → fBm (Perlin-ish without gradients)."""
     cell = max(8, int(24 * scale))
     n = np.zeros((h, w), dtype=np.float32)
-    amp = 1.0; total = 0.0
+    amp = 1.0
+    total = 0.0
     for i in range(4):
         n += amp * _value_noise(h, w, max(cell >> i, 2), seed + i)
-        total += amp; amp *= 0.5
+        total += amp
+        amp *= 0.5
     n = n / total
     return n
 
 def _bg_paper(w, h, c1, c2, _angle, scale):
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     base = c1a[None, None, :].repeat(h, 0).repeat(w, 1)
     # Fine high-freq grain + subtle low-freq blotches
     grain = _value_noise(h, w, max(2, int(2 * scale)), seed=11)
@@ -283,7 +293,8 @@ def _bg_paper(w, h, c1, c2, _angle, scale):
     return base * (1.0 - t[..., None]) + c2a * t[..., None] * 0.5 + base * 0.5 * t[..., None]
 
 def _bg_canvas(w, h, c1, c2, _angle, scale):
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     period = max(2, int(4 * scale))
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     weave_x = 0.5 + 0.5 * np.sin(xx * (2 * math.pi / period))
@@ -294,14 +305,16 @@ def _bg_canvas(w, h, c1, c2, _angle, scale):
     return c1a * (1.0 - t[..., None]) + c2a * t[..., None]
 
 def _bg_checker(w, h, c1, c2, _angle, scale):
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     sz = max(2, int(32 * scale))
     yy, xx = np.mgrid[0:h, 0:w]
     mask = ((xx // sz + yy // sz) % 2).astype(np.float32)
     return c1a * (1.0 - mask[..., None]) + c2a * mask[..., None]
 
 def _bg_dots(w, h, c1, c2, _angle, scale):
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     period = max(6, int(24 * scale))
     radius = max(2.0, period * 0.25)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
@@ -314,7 +327,8 @@ def _bg_dots(w, h, c1, c2, _angle, scale):
 
 def _bg_perlin(w, h, c1, c2, _angle, scale):
     n = _perlin_like(h, w, max(scale, 0.2))
-    c1a = np.array(c1, dtype=np.float32); c2a = np.array(c2, dtype=np.float32)
+    c1a = np.array(c1, dtype=np.float32)
+    c2a = np.array(c2, dtype=np.float32)
     return c1a * (1.0 - n[..., None]) + c2a * n[..., None]
 
 _BG_FN = {
@@ -570,7 +584,8 @@ def _merge_composition_data(existing_str: str, images, masks, node_id: str) -> d
 
     # update src dims + write thumbs
     for i in range(MAX_SLOTS):
-        img = images[i]; msk = masks[i]
+        img = images[i]
+        msk = masks[i]
         slot = cd["slots"][i]
         if img is not None:
             rgba = _tensor_to_rgba(img)
