@@ -14,6 +14,7 @@ from .nodes.load_pose       import LoadPoseKeypoint
 from .nodes.depth_composer import DepthComposer
 from .nodes.image_composer import ImageComposer
 from .nodes.text_layer     import TextLayer
+from .nodes.poisson_blend  import EricPoissonBlend
 from .core.model_manager    import print_model_status
 
 NODE_CLASS_MAPPINGS = {
@@ -28,6 +29,7 @@ NODE_CLASS_MAPPINGS = {
     "EricDepthComposer":    DepthComposer,
     "EricImageComposer":    ImageComposer,
     "EricTextLayer":        TextLayer,
+    "EricPoissonBlend":     EricPoissonBlend,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -42,6 +44,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "EricDepthComposer":    "Depth Composer",
     "EricImageComposer":    "Image Composer",
     "EricTextLayer":        "Text Layer (for Image Composer)",
+    "EricPoissonBlend":     "Poisson Blend (Seamless Clone)",
 }
 
 WEB_DIRECTORY = "./web"

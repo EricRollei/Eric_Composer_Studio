@@ -103,6 +103,135 @@ def _mask_to_tensor(arr: np.ndarray):
     return torch.from_numpy(arr[None].astype(np.float32)).contiguous()
 
 
+def _build_composer_layers(relay_layers, visibility_floor: float = 0.001,
+                           crop_pad_frac: float = 0.08,
+                           neutral_fill: float = 0.5) -> dict:
+    """Turn the post-affine per-layer captures into a relay bundle.
+
+    Steps for each non-BG layer (in z-order ascending, back→front):
+      1. Bake occlusion: occluded_alpha = alpha * (1 - max-of-higher-z alphas).
+         Layers further back have more potential occlusion.
+      2. Tight bbox of (occluded_alpha > floor), padded outward by crop_pad_frac.
+      3. RGB tight-cropped, transparent areas (1 - occluded_alpha) replaced with
+         neutral mid-gray so VL/VAE encoders don't waste budget on black.
+      4. Visibility = sum(occluded_alpha) / sum(alpha) (0..1) — fraction of
+         the layer's own footprint still showing in the final composite.
+
+    Returns a dict consumable by EricQwenEditUnify:
+      {
+        "version": 1,
+        "entries": [
+            {
+              "rgb":          (h,w,3) float32 in [0,1] — neutral-filled crop,
+              "mask":         (h,w)   float32 in [0,1] — occlusion-baked alpha,
+              "label":        str,
+              "slot_idx":     int,
+              "bbox":         (x0, y0, x1, y1) in canvas px,
+              "visibility":   float in [0,1] — visible fraction of own footprint,
+              "footprint":    float — sum(alpha) (proxy for size),
+            }, ...
+        ],
+      }
+    """
+    entries = []
+    if not relay_layers:
+        return {"version": 1, "entries": entries}
+
+    n = len(relay_layers)
+    # running_top accumulates the union of alphas of layers ABOVE the current
+    # one as we sweep from front-most back to back-most.
+    h, w = relay_layers[0]["alpha"].shape[:2]
+    running_top = np.zeros((h, w), dtype=np.float32)
+
+    occluded_per_layer = [None] * n
+    for i in range(n - 1, -1, -1):
+        a_i = relay_layers[i]["alpha"]
+        occ_i = np.clip(a_i * (1.0 - running_top), 0.0, 1.0)
+        occluded_per_layer[i] = occ_i
+        running_top = np.maximum(running_top, a_i)
+
+    for i, layer in enumerate(relay_layers):
+        a_full = layer["alpha"]
+        a_occ  = occluded_per_layer[i]
+        full_sum = float(a_full.sum())
+        occ_sum  = float(a_occ.sum())
+        if full_sum < 1.0:
+            visibility = 0.0
+        else:
+            visibility = max(0.0, min(1.0, occ_sum / full_sum))
+
+        # Bbox of visible portion. If essentially fully occluded, fall back
+        # to the full-alpha bbox so the entry is still meaningful, but mark
+        # visibility=0 (downstream filter will likely drop it).
+        ys, xs = np.where(a_occ > visibility_floor)
+        if ys.size == 0:
+            ys, xs = np.where(a_full > visibility_floor)
+        if ys.size == 0:
+            continue
+        y0, y1 = int(ys.min()), int(ys.max()) + 1
+        x0, x1 = int(xs.min()), int(xs.max()) + 1
+
+        bw, bh = x1 - x0, y1 - y0
+        pad_x = int(round(bw * crop_pad_frac))
+        pad_y = int(round(bh * crop_pad_frac))
+        cx0 = max(0, x0 - pad_x); cy0 = max(0, y0 - pad_y)
+        cx1 = min(w, x1 + pad_x); cy1 = min(h, y1 + pad_y)
+
+        rgb_crop = layer["rgb"][cy0:cy1, cx0:cx1].copy()
+        msk_crop = a_occ[cy0:cy1, cx0:cx1].copy()
+
+        # Neutral-fill transparent pixels so encoders don't see a black hole.
+        a_b = msk_crop[..., None]
+        rgb_filled = rgb_crop * a_b + neutral_fill * (1.0 - a_b)
+
+        entries.append({
+            "rgb":        np.clip(rgb_filled, 0.0, 1.0).astype(np.float32),
+            "mask":       np.clip(msk_crop, 0.0, 1.0).astype(np.float32),
+            "label":      layer["label"],
+            "slot_idx":   layer["slot_idx"],
+            "bbox":       (cx0, cy0, cx1, cy1),
+            "visibility": float(visibility),
+            "footprint":  full_sum,
+        })
+
+    return {"version": 1, "entries": entries}
+
+
+def _build_seam_mask(layer_alphas, canvas_w: int, canvas_h: int,
+                     border_px: int = 3, threshold: float = 0.05) -> np.ndarray:
+    """Build a thin seam map = union of each layer's silhouette border.
+
+    Captures both the outer perimeter of every non-BG layer and the internal
+    boundaries where overlapping layers meet (because each layer contributes
+    its own full silhouette edge). Downstream consumers (Unify node) can
+    further dilate / feather / extend this for ground-contact harmonisation.
+
+    Args:
+        layer_alphas: iterable of (H,W) float32 alpha maps in [0,1] at canvas
+                      resolution (post-affine, post-opacity).
+        canvas_w/h:   output dimensions (used for the empty fallback).
+        border_px:    half-thickness of the morphological border.
+        threshold:    binarisation threshold for layer alpha.
+    """
+    if not layer_alphas:
+        return np.zeros((canvas_h, canvas_w), dtype=np.float32)
+    import cv2
+    k = max(1, int(border_px))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1))
+    seam = np.zeros((canvas_h, canvas_w), dtype=np.float32)
+    for a in layer_alphas:
+        if a is None or a.size == 0:
+            continue
+        b = (a > threshold).astype(np.uint8)
+        if b.max() == 0:
+            continue
+        dil = cv2.dilate(b, kernel, iterations=1)
+        ero = cv2.erode(b, kernel, iterations=1)
+        edge = (dil.astype(np.float32) - ero.astype(np.float32))
+        seam = np.maximum(seam, np.clip(edge, 0.0, 1.0))
+    return seam
+
+
 # ── colour adjustments ───────────────────────────────────────────────────────
 
 def _apply_bcs(rgb: np.ndarray, brightness: float, contrast: float, saturation: float) -> np.ndarray:
@@ -616,8 +745,8 @@ class ImageComposer:
 
     CATEGORY     = "Eric_Composer_Studio"
     FUNCTION     = "compose"
-    RETURN_TYPES = ("IMAGE", "MASK")
-    RETURN_NAMES = ("image", "mask")
+    RETURN_TYPES = ("IMAGE", "MASK", "MASK", "STRING", "COMPOSER_LAYERS")
+    RETURN_NAMES = ("image", "mask", "seam_mask", "composition_data", "composer_layers")
     OUTPUT_NODE  = False
 
     @classmethod
@@ -687,6 +816,16 @@ class ImageComposer:
         else:
             ordered = non_bg
 
+        # Per-non-BG-layer canvas-space alphas, captured during compositing
+        # so the unify pass downstream has a precise seam map (each layer's
+        # silhouette border, including internal seams between overlapping
+        # foreground layers — not just the union outline).
+        layer_alphas_for_seam = []  # list of (H,W) float32 in [0,1]
+        # Per-non-BG-layer canvas-space RGB + raw alpha + label, captured for
+        # the COMPOSER_LAYERS relay bundle (occlusion-baked tight crops are
+        # built post-loop). Order matches z-order ascending (back → front).
+        relay_layers = []  # list of dicts: {rgb, alpha, label, slot_idx}
+
         for i, slot in ordered:
             if images[i] is None or not slot.get("visible", True):
                 continue
@@ -740,13 +879,44 @@ class ImageComposer:
             )
             if not is_bg_layer:
                 canvas_alpha = np.maximum(canvas_alpha, layer_alpha * opacity)
+                layer_alphas_for_seam.append(layer_alpha * opacity)
+                relay_layers.append({
+                    "rgb":      layer_rgb.astype(np.float32),
+                    "alpha":    (layer_alpha * opacity).astype(np.float32),
+                    "label":    str(slot.get("label", f"Layer {i+1}")),
+                    "slot_idx": int(i),
+                })
 
         canvas_rgb = np.clip(canvas_rgb, 0.0, 1.0)
         canvas_alpha = np.clip(canvas_alpha, 0.0, 1.0)
+
+        # Build seam mask: union of each non-BG layer's thin silhouette border.
+        # Captures BOTH the outer perimeter and any internal contact lines
+        # between overlapping foreground layers (e.g. dog standing in front
+        # of horse — the dog/horse boundary lands here).
+        seam_mask = _build_seam_mask(layer_alphas_for_seam, canvas_w, canvas_h)
 
         print(
             f"[Eric_Composer_Studio] ImageComposer: composed {sum(1 for img in images if img is not None)} "
             f"layer(s) onto {canvas_w}×{canvas_h} (bg={cd['background'].get('type')})"
         )
 
-        return (_rgb_to_tensor(canvas_rgb), _mask_to_tensor(canvas_alpha))
+        # Resolved composition JSON (post-merge, with src_w/src_h baked in)
+        # — emitted as a string output for downstream tooling / Unify node.
+        try:
+            composition_data_out = json.dumps(cd, separators=(",", ":"))
+        except (TypeError, ValueError):
+            composition_data_out = ""
+
+        # Relay bundle: occlusion-baked, tight-cropped, mid-gray-filled
+        # per-layer crops. Consumed by EricQwenEditUnify so the harmoniser
+        # sees clean identity references for each visible subject.
+        composer_layers = _build_composer_layers(relay_layers)
+
+        return (
+            _rgb_to_tensor(canvas_rgb),
+            _mask_to_tensor(canvas_alpha),
+            _mask_to_tensor(seam_mask),
+            composition_data_out,
+            composer_layers,
+        )

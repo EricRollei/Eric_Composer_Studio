@@ -49,3 +49,8 @@ nodes/_compose_tail.py
 examples/*.mp4
 examples/record_*
 examples/Screenshot*
+
+# ── Local workspace / build artifacts ─────────────────────────────────────────
+*.code-workspace
+node.zip
+*.zip
