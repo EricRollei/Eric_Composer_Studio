@@ -174,8 +174,10 @@ def _build_composer_layers(relay_layers, visibility_floor: float = 0.001,
         bw, bh = x1 - x0, y1 - y0
         pad_x = int(round(bw * crop_pad_frac))
         pad_y = int(round(bh * crop_pad_frac))
-        cx0 = max(0, x0 - pad_x); cy0 = max(0, y0 - pad_y)
-        cx1 = min(w, x1 + pad_x); cy1 = min(h, y1 + pad_y)
+        cx0 = max(0, x0 - pad_x)
+        cy0 = max(0, y0 - pad_y)
+        cx1 = min(w, x1 + pad_x)
+        cy1 = min(h, y1 + pad_y)
 
         rgb_crop = layer["rgb"][cy0:cy1, cx0:cx1].copy()
         msk_crop = a_occ[cy0:cy1, cx0:cx1].copy()
