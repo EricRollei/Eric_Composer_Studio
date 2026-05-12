@@ -1,5 +1,8 @@
 # Eric_Composer_Studio
 
+![Image Composer Example](examples/image-composer3.png)
+![Screenshot](examples/Screenshot%202026-04-22%20143924.png)
+
 A ComfyUI custom node package for high-quality pose detection plus interactive multi-layer image, depth, pose, and text compositing. Pose extraction uses RTMW and DWPose via the `rtmlib` ONNX backend; the composer nodes provide canvas-based layer arrangement, blend modes, drop shadows, and per-layer transforms — all in single ComfyUI nodes.
 
 > Formerly published as `Eric_pose_studio`. Renamed to reflect the broader scope (image / depth / text compositing in addition to pose). Saved pose JSON files from the previous name still load.
