@@ -49,6 +49,7 @@ nodes/_compose_tail.py
 examples/*.mp4
 examples/record_*
 examples/Screenshot*
+!examples/Screenshot 2026-04-22 143924.png
 
 # ── Local workspace / build artifacts ─────────────────────────────────────────
 *.code-workspace
